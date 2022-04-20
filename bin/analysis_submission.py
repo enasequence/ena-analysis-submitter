@@ -2,7 +2,7 @@
 
 __author__ = "Nadim Rahman"
 
-import argparse, hashlib, os, subprocess, sys, time, yaml
+import argparse, hashlib, json, os, subprocess, sys, time, yaml
 import xml.etree.ElementTree as ET
 from datetime import datetime
 from sra_objects import createWebinXML
@@ -174,54 +174,94 @@ class upload_and_submit:
                 else:
                     self.upload_to_ENA(trialcount)
 
-    def retrieve_accession(self, root):
+    def save_accession(self, accession):
         """
         Retrieve the analysis accession of a successful result
         :param root: The receipt XML to be parsed
         :return: Analysis accession from the receipt XML
         """
-        analysis_attributes = root[0].attrib        # Dictionary of XML attributes for the analysis object
-        analysis_accession = analysis_attributes.get('accession')
         successful_subs = os.path.join(self.parent_dir, 'successful_submissions.txt')
         with open(successful_subs, 'a') as f:
             for file in self.analysis_file:
-                f.write(str(analysis_accession) + "\t" + str(file.get('name')) + "\t" + str(self.datestamp) + "\n")             # Saves the analysis accession, local path to file and date of submission
-        return analysis_accession
+                f.write(str(accession) + "\t" + str(file.get('name')) + "\t" + str(self.datestamp) + "\n")             # Saves the analysis accession, local path to file and date of submission
+
+    def retrieve_xml_info(self, output, error, attempts, webin_loc):
+        """
+        Handle information from an XML output following submission
+        :param output: Output requests object from submission
+        :param error: Error output requests object from submission
+        :param attempts: Number of attempts for submission
+        :return: Analysis accession or error message
+        """
+        root = ET.fromstring(output.decode())
+        receipt_attributes = root.attrib
+        if receipt_attributes.get('success') == 'true':  # If submission successful, obtain the analysis accession
+            analysis_attributes = root[0].attrib  # Dictionary of XML attributes for the analysis object
+            analysis_accession = analysis_attributes.get('accession')
+            self.save_accession(analysis_accession)
+            print('> Analysis ID: {}'.format(analysis_accession))
+            return analysis_accession
+        elif receipt_attributes.get('success') == 'false':  # Retry submission if unsuccessful
+            time.sleep(10)
+            attempts += 1
+            if attempts > 3:
+                analysis_accession = '> ERROR - Submission failed for {}: {}'.format(webin_loc, error.decode())
+                print(analysis_accession)
+                return analysis_accession
+            else:
+                self.submission(attempts)
+
+    def retrieve_json_info(self, output, error, attempts, webin_loc):
+        """
+        Handle information from JSON output following the submission
+        :param output: Output requests object from submission
+        :param error: Error output requests object from submission
+        :param attempts: Number of attempts for submission
+        :return: Submission accession or error message
+        """
+        output = json.loads(output)         # Convert JSON into dictionary object
+        try:
+            submission_id = output['submissionId']
+            self.save_accession(submission_id)
+            print('> Submission ID: {}'.format(submission_id))
+            return submission_id
+        except:
+            # If the output could not obtained, retry the submission
+            time.sleep(10)
+            attempts += 1
+            if attempts > 3:
+                submission_id = '> ERROR - Submission failed for {}: {}'.format(webin_loc, error.decode())
+                print(submission_id)
+                return submission_id
+            else:
+                self.submission(attempts)
 
     def submission(self, attempts):
         """
         Carry out the submission
         :param attempts: The number of times the submission has been attempted
         """
-        submission_loc = os.path.join(self.parent_dir,
-                                      'submission')  # Prefix for the name of the submission XML with file path
-        analysis_loc = os.path.join(self.parent_dir,
-                                    'analysis')  # Prefix for the name of the analysis XML with file path
+        webin_loc = os.path.join(self.parent_dir, 'webin')          # Prefix for the name of the Webin XML with file path
+
+        # Construct the appropriate submission command and run
         if self.test is True:
             command = 'curl -u {}:{} -X POST -H "accept: */*"  -H "Content-Type: multipart/form-data" -F "file=@{}_{}.xml;type=text/xml" "https://wwwdev.ebi.ac.uk/ena/submit/webin-v2/{}"'.format(
-                self.analysis_username, self.analysis_password, analysis_loc,
+                self.analysis_username, self.analysis_password, webin_loc,
                 self.datestamp, self.api_service)
         else:
             command = 'curl -u {}:{} -X POST -H "accept: */*"  -H "Content-Type: multipart/form-data" -F "file=@{}_{}.xml;type=txt/xml" "https://www.ebi.ac.uk/ena/submit/webin-v2/{}"'.format(
-                self.analysis_username, self.analysis_password, analysis_loc,
+                self.analysis_username, self.analysis_password, webin_loc,
                 self.datestamp, self.api_service)
         sp = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = sp.communicate()
 
-        root = ET.fromstring(out.decode())
-        receipt_attributes = root.attrib
-        if receipt_attributes.get('success') == 'true':             # If submission successful, obtain the analysis accession
-            analysis_accession = self.retrieve_accession(root)
-            print('> {}'.format(analysis_accession))
-            return command, out
-        elif receipt_attributes.get('success') == 'false':          # Retry submission if unsuccessful
-            time.sleep(10)
-            attempts += 1
-            if attempts > 3:
-                print('> ERROR - Submission failed for {}: {}'.format(analysis_loc, err.decode()))
-                return command, out
-            else:
-                self.submission(attempts)
+        # Retrieve the resulting accession or attempt if it has failed
+        if self.api_service == 'submit':
+            accession = self.retrieve_xml_info(out, err, attempts, webin_loc)           # Analysis ID is retrieved
+        elif self.api_service == 'submit/queue':
+            accession = self.retrieve_json_info(out, err, attempts, webin_loc)          # Submission ID is retrieved which needs to be polled
+
+        return command, out
 
     def submit_data(self):
         """
@@ -297,5 +337,5 @@ if __name__=='__main__':
     webin_xml = create_xml_object.build_webin()
 
     # Upload data files and submit to ENA
-    # submission_obj = upload_and_submit(analysis_file, args.analysis_username, args.analysis_password, analysis_date, args.output_location, api_service, args.test)
-    # submission = submission_obj.submit_data()
+    submission_obj = upload_and_submit(analysis_file, args.analysis_username, args.analysis_password, analysis_date, args.output_location, api_service, args.test)
+    submission = submission_obj.submit_data()
