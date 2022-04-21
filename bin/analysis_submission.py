@@ -58,7 +58,6 @@ def convert_to_list(string):
     """
     Convert a string to a list by a particular separator
     :param string: String to convert to list
-    :param separator: Separator to split string on
     :return: List
     """
     if os.path.isfile(string):
@@ -120,6 +119,7 @@ class upload_and_submit:
     def upload_to_ENA(self, trialcount):
         """
         Upload data file(s) to ENA
+        :param trialcount: Submission attempt number
         :return: Lists of successful file upload and list of any errors during upload
         """
         upload_errors = []
@@ -177,7 +177,7 @@ class upload_and_submit:
     def save_accession(self, accession):
         """
         Retrieve the analysis accession of a successful result
-        :param root: The receipt XML to be parsed
+        :param accession: Successfully submitted accession to be saved
         :return: Analysis accession from the receipt XML
         """
         successful_subs = os.path.join(self.parent_dir, 'successful_submissions.txt')
@@ -242,6 +242,7 @@ class upload_and_submit:
         """
         Carry out the submission
         :param attempts: The number of times the submission has been attempted
+        :return: Command string and output
         """
         webin_loc = os.path.join(self.parent_dir, 'webin')          # Prefix for the name of the Webin XML with file path
 
