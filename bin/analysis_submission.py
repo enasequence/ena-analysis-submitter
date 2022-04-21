@@ -191,6 +191,7 @@ class upload_and_submit:
         :param output: Output requests object from submission
         :param error: Error output requests object from submission
         :param attempts: Number of attempts for submission
+        :param webin_loc Full path of the Webin XML
         :return: Analysis accession or error message
         """
         root = ET.fromstring(output.decode())
@@ -205,7 +206,7 @@ class upload_and_submit:
             time.sleep(10)
             attempts += 1
             if attempts > 3:
-                analysis_accession = '> ERROR - Submission failed for {}: {}'.format(webin_loc, error.decode())
+                analysis_accession = '> ERROR - Submission failed for {}_{}.xml: {}'.format(webin_loc, self.datestamp, error.decode())
                 print(analysis_accession)
                 return analysis_accession
             else:
@@ -217,6 +218,7 @@ class upload_and_submit:
         :param output: Output requests object from submission
         :param error: Error output requests object from submission
         :param attempts: Number of attempts for submission
+        :param webin_loc Full path of the Webin XML
         :return: Submission accession or error message
         """
         output = json.loads(output)         # Convert JSON into dictionary object
@@ -230,7 +232,7 @@ class upload_and_submit:
             time.sleep(10)
             attempts += 1
             if attempts > 3:
-                submission_id = '> ERROR - Submission failed for {}: {}'.format(webin_loc, error.decode())
+                submission_id = '> ERROR - Submission failed for {}_{}.xml: {}'.format(webin_loc, self.datestamp, error.decode())
                 print(submission_id)
                 return submission_id
             else:
