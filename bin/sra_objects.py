@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-__author__ = "Nadim Rahman, Nima Pakseresht, Blaise Alako"
+__author__ = "Nadim Rahman"
 
 from lxml import etree
 import os
@@ -131,13 +131,14 @@ class createSubmissionXML:
 
 class createWebinXML:
     # Class which handles creation of a Webin XML to be used for the submission to ENA
-    def __init__(self, alias, configuration, project_accession, run_accession, analysis_date, analysis_file, analysis_type, parent_dir, sample_accession):
+    def __init__(self, alias, configuration, project_accession, run_accession, analysis_date, timestamp_now, analysis_file, analysis_type, parent_dir, sample_accession):
         self.alias = alias
         self.centre_name = configuration['CENTER_NAME']
         self.action = configuration['ACTION']
         self.project_accession = project_accession
         self.run_accession = run_accession
         self.analysis_date = analysis_date
+        self.timestamp_now = timestamp_now
         self.analysis_file = analysis_file
         self.analysis_title = configuration['TITLE']
         self.analysis_description = configuration['DESCRIPTION']
@@ -169,7 +170,7 @@ class createWebinXML:
         print('*' * 100)
 
         # Save the submission XML to a file
-        xml_filename = 'webin_{}.xml'.format(self.analysis_date)
+        xml_filename = 'webin_{}.xml'.format(self.timestamp_now)
         xml_filepath = os.path.join(self.parent_dir, xml_filename)
         webin_xml.write(xml_filepath, pretty_print=True, xml_declaration=True, encoding='UTF-8')
 
