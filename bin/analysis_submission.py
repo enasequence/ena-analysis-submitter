@@ -2,11 +2,10 @@
 
 __author__ = "Nadim Rahman"
 
-import argparse, hashlib, os, subprocess, sys, time, yaml
+import argparse, hashlib, json, os, subprocess, sys, time, yaml
 import xml.etree.ElementTree as ET
 from datetime import datetime
-from sra_objects import createAnalysisXML
-from sra_objects import createSubmissionXML
+from sra_objects import createWebinXML
 
 
 
@@ -32,12 +31,13 @@ def get_args():
     parser.add_argument('-au', '--analysis_username', help='Valid Webin submission account ID (e.g. Webin-XXXXX) used to carry out the submission', type=str, required=True)
     parser.add_argument('-ap', '--analysis_password', help='Password for Webin submission account', type=str, required=True)
     parser.add_argument('-o', '--output_location', help='A parent directory to pull configuration file and store outputs.', type=str, required=False)
-    parser.add_argument('-t', '--test', help='Specify whether to use ENA test server for submission. Options are true/T/t or false/F/f', choices=['true', 'T', 't', 'false', 'F', 'f'], required=True)
+    parser.add_argument('-as', '--asynchronous', help='Specify usage of the asynchronous Webin API for submissions. Options are true/t or false/f. Default: false/f', type=str.lower, choices=['true', 't', 'false', 'f'], required=False)
+    parser.add_argument('-t', '--test', help='Specify whether to use ENA test server for submission. Options are true/t or false/f', type=str.lower, choices=['true', 't', 'false', 'f'], required=True)
     args = parser.parse_args()
 
-    if args.test in ['true', 'T', 't']:
+    if args.test in ['true', 't']:
         args.test = True
-    elif args.test in ['false', 'F', 'f']:
+    elif args.test in ['false', 'f']:
         args.test = False
     return args
 
@@ -58,7 +58,6 @@ def convert_to_list(string):
     """
     Convert a string to a list by a particular separator
     :param string: String to convert to list
-    :param separator: Separator to split string on
     :return: List
     """
     if os.path.isfile(string):
@@ -107,54 +106,20 @@ class file_handling:
         return files_information
 
 
-class create_xmls:
-    def __init__(self, alias, project_accession, run_accession, analysis_date, analysis_file, analysis_title, analysis_description, configuration, analysis_type, parent_dir, sample_accession=""):
-        self.alias = alias
-        self.action = configuration['ACTION']
-        self.project_accession = project_accession
-        self.run_accession = run_accession
-        self.analysis_date = analysis_date
-        self.analysis_file = analysis_file
-        self.analysis_title = analysis_title
-        self.analysis_description = analysis_description
-        self.analysis_attributes = {'PIPELINE_NAME': configuration['PIPELINE_NAME'], 'PIPELINE_VERSION': configuration['PIPELINE_VERSION'], 'SUBMISSION_TOOL': configuration['SUBMISSION_TOOL'], 'SUBMISSION_TOOL_VERSION': configuration['SUBMISSION_TOOL_VERSION']}
-        self.analysis_type = analysis_type
-        self.parent_dir = parent_dir
-        self.sample_accession = sample_accession
-        self.centre_name = configuration['CENTER_NAME']
-
-    def build_analysis_xml(self):
-        """
-        Create an Analysis XML for submission
-        :return:
-        """
-        analysis_obj = createAnalysisXML(self.alias, self.project_accession, self.run_accession, self.analysis_date, self.analysis_file, self.analysis_title, self.analysis_description, self.analysis_attributes, self.analysis_type, self.parent_dir, self.sample_accession, self.centre_name)
-        analysis_xml = analysis_obj.build_analysis()
-        return analysis_xml
-
-    def build_submission_xml(self):
-        """
-        Create a Submission XML for submission
-        :return:
-        """
-        analysis_xml_filename = 'analysis_{}.xml'.format(self.analysis_date)
-        submission_obj = createSubmissionXML(self.alias, self.action, self.analysis_date, analysis_xml_filename, 'analysis', self.parent_dir, self.centre_name)
-        submission_xml = submission_obj.build_submission()
-        return submission_xml
-
-
 class upload_and_submit:
-    def __init__(self, analysis_file, analysis_username, analysis_password, datestamp, parent_dir, test):
+    def __init__(self, analysis_file, analysis_username, analysis_password, datestamp, parent_dir, api_service, test):
         self.analysis_file = analysis_file
         self.analysis_username = analysis_username
         self.analysis_password = analysis_password
         self.datestamp = datestamp
         self.parent_dir = parent_dir
+        self.api_service = api_service
         self.test = test
 
     def upload_to_ENA(self, trialcount):
         """
         Upload data file(s) to ENA
+        :param trialcount: Submission attempt number
         :return: Lists of successful file upload and list of any errors during upload
         """
         upload_errors = []
@@ -209,54 +174,97 @@ class upload_and_submit:
                 else:
                     self.upload_to_ENA(trialcount)
 
-    def retrieve_accession(self, root):
+    def save_accession(self, accession):
         """
         Retrieve the analysis accession of a successful result
-        :param root: The receipt XML to be parsed
+        :param accession: Successfully submitted accession to be saved
         :return: Analysis accession from the receipt XML
         """
-        analysis_attributes = root[0].attrib        # Dictionary of XML attributes for the analysis object
-        analysis_accession = analysis_attributes.get('accession')
         successful_subs = os.path.join(self.parent_dir, 'successful_submissions.txt')
         with open(successful_subs, 'a') as f:
             for file in self.analysis_file:
-                f.write(str(analysis_accession) + "\t" + str(file.get('name')) + "\t" + str(self.datestamp) + "\n")             # Saves the analysis accession, local path to file and date of submission
-        return analysis_accession
+                f.write(str(accession) + "\t" + str(file.get('name')) + "\t" + str(self.datestamp) + "\n")             # Saves the analysis accession, local path to file and date of submission
+
+    def retrieve_xml_info(self, output, error, attempts, webin_loc):
+        """
+        Handle information from an XML output following submission
+        :param output: Output requests object from submission
+        :param error: Error output requests object from submission
+        :param attempts: Number of attempts for submission
+        :param webin_loc Full path of the Webin XML
+        :return: Analysis accession or error message
+        """
+        root = ET.fromstring(output.decode())
+        receipt_attributes = root.attrib
+        if receipt_attributes.get('success') == 'true':  # If submission successful, obtain the analysis accession
+            analysis_attributes = root[0].attrib  # Dictionary of XML attributes for the analysis object
+            analysis_accession = analysis_attributes.get('accession')
+            self.save_accession(analysis_accession)
+            print('> Analysis ID: {}'.format(analysis_accession))
+            return analysis_accession
+        elif receipt_attributes.get('success') == 'false':  # Retry submission if unsuccessful
+            time.sleep(10)
+            attempts += 1
+            if attempts > 3:
+                analysis_accession = '> ERROR - Submission failed for {}_{}.xml: {}'.format(webin_loc, self.datestamp, error.decode())
+                print(analysis_accession)
+                return analysis_accession
+            else:
+                self.submission(attempts)
+
+    def retrieve_json_info(self, output, error, attempts, webin_loc):
+        """
+        Handle information from JSON output following the submission
+        :param output: Output requests object from submission
+        :param error: Error output requests object from submission
+        :param attempts: Number of attempts for submission
+        :param webin_loc Full path of the Webin XML
+        :return: Submission accession or error message
+        """
+        output = json.loads(output)         # Convert JSON into dictionary object
+        try:
+            submission_id = output['submissionId']
+            self.save_accession(submission_id)
+            print('> Submission ID: {}'.format(submission_id))
+            return submission_id
+        except:
+            # If the output could not obtained, retry the submission
+            time.sleep(10)
+            attempts += 1
+            if attempts > 3:
+                submission_id = '> ERROR - Submission failed for {}_{}.xml: {}'.format(webin_loc, self.datestamp, error.decode())
+                print(submission_id)
+                return submission_id
+            else:
+                self.submission(attempts)
 
     def submission(self, attempts):
         """
         Carry out the submission
         :param attempts: The number of times the submission has been attempted
+        :return: Command string and output
         """
-        submission_loc = os.path.join(self.parent_dir,
-                                      'submission')  # Prefix for the name of the submission XML with file path
-        analysis_loc = os.path.join(self.parent_dir,
-                                    'analysis')  # Prefix for the name of the analysis XML with file path
+        webin_loc = os.path.join(self.parent_dir, 'webin')          # Prefix for the name of the Webin XML with file path
+
+        # Construct the appropriate submission command and run
         if self.test is True:
-            command = 'curl -u {}:{} -F "SUBMISSION=@{}_{}.xml" -F "ANALYSIS=@{}_{}.xml" "https://wwwdev.ebi.ac.uk/ena/submit/drop-box/submit/"'.format(
-                self.analysis_username, self.analysis_password, submission_loc, self.datestamp, analysis_loc,
-                self.datestamp)
+            command = 'curl -u {}:{} -X POST -H "accept: */*"  -H "Content-Type: multipart/form-data" -F "file=@{}_{}.xml;type=text/xml" "https://wwwdev.ebi.ac.uk/ena/submit/webin-v2/{}"'.format(
+                self.analysis_username, self.analysis_password, webin_loc,
+                self.datestamp, self.api_service)
         else:
-            command = 'curl -u {}:{} -F "SUBMISSION=@{}_{}.xml" -F "ANALYSIS=@{}_{}.xml" "https://www.ebi.ac.uk/ena/submit/drop-box/submit/"'.format(
-                self.analysis_username, self.analysis_password, submission_loc, self.datestamp, analysis_loc,
-                self.datestamp)
+            command = 'curl -u {}:{} -X POST -H "accept: */*"  -H "Content-Type: multipart/form-data" -F "file=@{}_{}.xml;type=txt/xml" "https://www.ebi.ac.uk/ena/submit/webin-v2/{}"'.format(
+                self.analysis_username, self.analysis_password, webin_loc,
+                self.datestamp, self.api_service)
         sp = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = sp.communicate()
 
-        root = ET.fromstring(out.decode())
-        receipt_attributes = root.attrib
-        if receipt_attributes.get('success') == 'true':             # If submission successful, obtain the analysis accession
-            analysis_accession = self.retrieve_accession(root)
-            print('> {}'.format(analysis_accession))
-            return command, out
-        elif receipt_attributes.get('success') == 'false':          # Retry submission if unsuccessful
-            time.sleep(10)
-            attempts += 1
-            if attempts > 3:
-                print('> ERROR - Submission failed for {}: {}'.format(analysis_loc, err.decode()))
-                return command, out
-            else:
-                self.submission(attempts)
+        # Retrieve the resulting accession or attempt if it has failed
+        if self.api_service == 'submit':
+            accession = self.retrieve_xml_info(out, err, attempts, webin_loc)           # Analysis ID is retrieved
+        elif self.api_service == 'submit/queue':
+            accession = self.retrieve_json_info(out, err, attempts, webin_loc)          # Submission ID is retrieved which needs to be polled
+
+        return command, out
 
     def submit_data(self):
         """
@@ -293,6 +301,12 @@ if __name__=='__main__':
         args.output_location = '.'          # Default is the current working directory, unless specified
     configuration = read_config(args.output_location)           # Configuration from YAML
 
+    # Handle indication of asynchronous Webin API
+    if args.asynchronous in ['true', 't']:
+        api_service = 'submit/queue'
+    else:
+        api_service = 'submit'
+
     # Handle any metadata references
     if args.sample_list is not None:            # Sample references are technically optional for analysis objects
         samples = convert_to_list(args.sample_list)
@@ -321,11 +335,10 @@ if __name__=='__main__':
     file_preparation_obj = file_handling(files, args.analysis_type)     # Instantiate object for analysis file handling information
     analysis_file = file_preparation_obj.construct_file_info()      # Obtain information on file/s to be submitted for the analysis XML
 
-    # Create the analysis and submission XML for submission
-    create_xml_object = create_xmls(alias, args.project, runs, analysis_date, analysis_file, configuration['TITLE'], configuration['DESCRIPTION'], configuration, args.analysis_type, args.output_location, sample_accession=samples)
-    analysis_xml = create_xml_object.build_analysis_xml()
-    submission_xml = create_xml_object.build_submission_xml()
+    # Create the Webin XML for submission
+    create_xml_object = createWebinXML(alias, configuration, args.project, runs, analysis_date, analysis_file, args.analysis_type, args.output_location, sample_accession=samples)
+    webin_xml = create_xml_object.build_webin()
 
     # Upload data files and submit to ENA
-    submission_obj = upload_and_submit(analysis_file, args.analysis_username, args.analysis_password, analysis_date, args.output_location, args.test)
+    submission_obj = upload_and_submit(analysis_file, args.analysis_username, args.analysis_password, analysis_date, args.output_location, api_service, args.test)
     submission = submission_obj.submit_data()

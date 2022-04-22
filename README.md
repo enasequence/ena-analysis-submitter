@@ -5,9 +5,9 @@ Background
 This tool has been developed to handle submissions of Pathogen Analysis objects into ENA. Its intended use is as an additional component to integrated workflows in the [Data Hubs](http://europepmc.org/article/PMC/6927095).
 
 The tool uploads analysis data files and carries out the submission to a project, although possible for general use, these projects are generally associated with certain Data Hubs, and therefore result in analysis being submitted to the Data Hub. Altogether the tool does the following:
-- Creates appropriate analysis and submission XMLs required for programmatic submission to REST API.
-- Carries out submission process to ENA using generated XMLs.
-- Obtains and stores resulting assigned analysis accessions.
+- Creates appropriate Webin XML required for programmatic submission to REST API.
+- Carries out submission process to ENA using generated XML.
+- Obtains and stores resulting assigned analysis or submission accession, depending on whether the asynchronous Webin API endpoint is specified. 
 
 Usage
 -----
@@ -22,6 +22,8 @@ The tool expects knowledge of the following, prior to usage:
 `python3 analysis_submission.py --help` for more information.
 
 An output directory can be specified using `-o` flag, where the configuration file will be read from, and any output from the tool is stored. By default, the tool works from the current working directory.
+
+If the asynchronous Webin API endpoint is specified (using the `-as` flag), then generated submission accessions that are saved by the tool must be polled/queried to obtain the corresponding analysis accession separately. 
 
 
 To utilise the Docker container:
