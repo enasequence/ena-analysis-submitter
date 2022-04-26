@@ -30,6 +30,7 @@ def get_args():
     parser.add_argument('-a', '--analysis_type', help='Type of analysis to submit. Options: PATHOGEN_ANALYSIS, COVID19_CONSENSUS, COVID19_FILTERED_VCF, PHYLOGENY_ANALYSIS', choices=['PATHOGEN_ANALYSIS', 'COVID19_CONSENSUS', 'COVID19_FILTERED_VCF', 'PHYLOGENY_ANALYSIS'], required=True)         # Can add more options if you wish to share more analysis types
     parser.add_argument('-au', '--analysis_username', help='Valid Webin submission account ID (e.g. Webin-XXXXX) used to carry out the submission', type=str, required=True)
     parser.add_argument('-ap', '--analysis_password', help='Password for Webin submission account', type=str, required=True)
+    parser.add_argument('-ad', '--analysis_date', help='Specify date of analysis', type=str, required=False)
     parser.add_argument('-o', '--output_location', help='A parent directory to pull configuration file and store outputs.', type=str, required=False)
     parser.add_argument('-as', '--asynchronous', help='Specify usage of the asynchronous Webin API for submissions. Options are true/t or false/f. Default: false/f', type=str.lower, choices=['true', 't', 'false', 'f'], required=False)
     parser.add_argument('-t', '--test', help='Specify whether to use ENA test server for submission. Options are true/t or false/f', type=str.lower, choices=['true', 't', 'false', 'f'], required=True)
@@ -324,26 +325,26 @@ if __name__=='__main__':
         files = [args.file]
 
     # Define sections to include in analysis XML
-    timestamp = datetime.now()
-    analysis_date = timestamp.strftime("%Y-%m-%dT%H:%M:%S")        # Get a formatted date and time string
+    timestamp_now = datetime.now().strftime("%Y-%m-%dT%H:%M:%S") # Get a formatted date and time string
+    analysis_date = timestamp_now if not args.analysis_date else args.analysis_date
 
     # Create an appropriate alias to tag submissions
     if len(runs) == 1:
         alias = configuration['ALIAS'] + '_' + str(runs[0])
         if samples != "" and len(samples) == 1:         # If there is a single sample reference provided, add this to the alias
             alias += '_' + str(samples[0])
-        alias += "_" + str(analysis_date)
+        alias += "_" + str(timestamp_now)
     else:
-        alias = configuration['ALIAS'] + '_' + str(analysis_date)
+        alias = configuration['ALIAS'] + '_' + str(timestamp_now)
 
     # Obtain file information
     file_preparation_obj = file_handling(files, args.analysis_type)     # Instantiate object for analysis file handling information
     analysis_file = file_preparation_obj.construct_file_info()      # Obtain information on file/s to be submitted for the analysis XML
 
     # Create the Webin XML for submission
-    create_xml_object = createWebinXML(alias, configuration, args.project, analysis_date, analysis_file, args.analysis_type, args.output_location, sample_accession=samples, run_accession=runs)
+    create_xml_object = createWebinXML(alias, configuration, args.project, analysis_date, timestamp_now, analysis_file, args.analysis_type, args.output_location, sample_accession=samples, run_accession=runs)
     webin_xml = create_xml_object.build_webin()
 
     # Upload data files and submit to ENA
-    submission_obj = upload_and_submit(analysis_file, args.analysis_username, args.analysis_password, analysis_date, args.output_location, api_service, args.test)
+    submission_obj = upload_and_submit(analysis_file, args.analysis_username, args.analysis_password, timestamp_now, args.output_location, api_service, args.test)
     submission = submission_obj.submit_data()
