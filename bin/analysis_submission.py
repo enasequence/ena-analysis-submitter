@@ -25,7 +25,7 @@ def get_args():
         """)
     parser.add_argument('-p', '--project', help='Valid ENA project accession to submit analysis to (e.g. PRJXXXXXXX)', type=str, required=True)
     parser.add_argument('-s', '--sample_list', help='ENA sample accessions/s to link with the analysis submission, accepts a list of accessions (e.g. ERSXXXXX,ERSXXXXX) or a file with list of accessions separated by new line', required=False)
-    parser.add_argument('-r', '--run_list', help='ENA run accession/s to link with the analysis submission, accepts a list of accessions (e.g. ERRXXXXX,ERRXXXXX) or a file with a list of accessions separated by new line', required=True)
+    parser.add_argument('-r', '--run_list', help='ENA run accession/s to link with the analysis submission, accepts a list of accessions (e.g. ERRXXXXX,ERRXXXXX) or a file with a list of accessions separated by new line', required=False)
     parser.add_argument('-f', '--file', help='Files of analysis to submit to the project, accepts a list of files (e.g. path/to/file1.csv.gz,path/to/file2.txt.gz)', type=str, required=True)
     parser.add_argument('-a', '--analysis_type', help='Type of analysis to submit. Options: PATHOGEN_ANALYSIS, COVID19_CONSENSUS, COVID19_FILTERED_VCF, PHYLOGENY_ANALYSIS', choices=['PATHOGEN_ANALYSIS', 'COVID19_CONSENSUS', 'COVID19_FILTERED_VCF', 'PHYLOGENY_ANALYSIS'], required=True)         # Can add more options if you wish to share more analysis types
     parser.add_argument('-au', '--analysis_username', help='Valid Webin submission account ID (e.g. Webin-XXXXX) used to carry out the submission', type=str, required=True)
@@ -312,7 +312,12 @@ if __name__=='__main__':
         samples = convert_to_list(args.sample_list)
     else:
         samples = ""
-    runs = convert_to_list(args.run_list)
+
+    if args.run_list is not None:
+        runs = convert_to_list(args.run_list)
+    else:
+        runs = ""
+
     if ',' in args.file:
         files = list(args.file.split(','))
     else:
@@ -336,7 +341,7 @@ if __name__=='__main__':
     analysis_file = file_preparation_obj.construct_file_info()      # Obtain information on file/s to be submitted for the analysis XML
 
     # Create the Webin XML for submission
-    create_xml_object = createWebinXML(alias, configuration, args.project, runs, analysis_date, analysis_file, args.analysis_type, args.output_location, sample_accession=samples)
+    create_xml_object = createWebinXML(alias, configuration, args.project, analysis_date, analysis_file, args.analysis_type, args.output_location, sample_accession=samples, run_accession=runs)
     webin_xml = create_xml_object.build_webin()
 
     # Upload data files and submit to ENA

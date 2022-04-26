@@ -7,11 +7,10 @@ import os
 
 class createAnalysisXML:
     # Class which handles creation of an analysis XML component of the Webin XML
-    def __init__(self, webin_elt, alias, project_accession, run_accession, analysis_date, analysis_file, analysis_title, analysis_description, analysis_attributes, analysis_type, sample_accession="", centre_name=""):
+    def __init__(self, webin_elt, alias, project_accession, analysis_date, analysis_file, analysis_title, analysis_description, analysis_attributes, analysis_type, sample_accession="", run_accession="", centre_name=""):
         self.webin_elt = webin_elt
         self.alias = alias
         self.project_accession = project_accession
-        self.run_accession = run_accession
         self.analysis_date = analysis_date
         self.analysis_file = analysis_file
         self.analysis_title = analysis_title
@@ -19,6 +18,7 @@ class createAnalysisXML:
         self.analysis_attributes = analysis_attributes
         self.analysis_type = analysis_type
         self.sample_accession = sample_accession
+        self.run_accession = run_accession
         self.centre_name = centre_name
 
     def split_sub_elements(self, references, parent_element, element_name):
@@ -82,7 +82,8 @@ class createAnalysisXML:
         projectrefElt = self.split_sub_elements(self.project_accession, analysisElt, 'STUDY_REF')
         if self.sample_accession != "":
             samplerefElt = self.split_sub_elements(self.sample_accession, analysisElt, 'SAMPLE_REF')
-        runrefElt = self.split_sub_elements(self.run_accession, analysisElt, 'RUN_REF')
+        if self.run_accession != "":
+            runrefElt = self.split_sub_elements(self.run_accession, analysisElt, 'RUN_REF')
 
         analysis_type = etree.SubElement(analysisElt, 'ANALYSIS_TYPE')
         print(self.analysis_type)
@@ -131,12 +132,11 @@ class createSubmissionXML:
 
 class createWebinXML:
     # Class which handles creation of a Webin XML to be used for the submission to ENA
-    def __init__(self, alias, configuration, project_accession, run_accession, analysis_date, analysis_file, analysis_type, parent_dir, sample_accession):
+    def __init__(self, alias, configuration, project_accession, analysis_date, analysis_file, analysis_type, parent_dir, sample_accession="", run_accession=""):
         self.alias = alias
         self.centre_name = configuration['CENTER_NAME']
         self.action = configuration['ACTION']
         self.project_accession = project_accession
-        self.run_accession = run_accession
         self.analysis_date = analysis_date
         self.analysis_file = analysis_file
         self.analysis_title = configuration['TITLE']
@@ -145,6 +145,7 @@ class createWebinXML:
         self.analysis_type = analysis_type
         self.parent_dir = parent_dir
         self.sample_accession = sample_accession
+        self.run_accession = run_accession
 
     def build_webin(self):
         """
@@ -160,7 +161,7 @@ class createWebinXML:
         self.submission_xml = submission_obj.build_submission()
 
         # Include Analysis component of Analysis XML
-        analysis_obj = createAnalysisXML(webin_parent, self.alias, self.project_accession, self.run_accession, self.analysis_date, self.analysis_file, self.analysis_title, self.analysis_description, self.analysis_attributes, self.analysis_type, self.sample_accession, self.centre_name)
+        analysis_obj = createAnalysisXML(webin_parent, self.alias, self.project_accession, self.analysis_date, self.analysis_file, self.analysis_title, self.analysis_description, self.analysis_attributes, self.analysis_type, self.sample_accession, self.run_accession, self.centre_name)
         self.analysis_xml = analysis_obj.build_analysis()
 
         print('*' * 100)
