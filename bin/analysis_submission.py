@@ -163,7 +163,6 @@ class upload_and_submit:
                     upload_errors.append({file.get('name'): err.decode()})
                     print(err.decode(), file=sys.stderr)
                 print("Returncode of subprocess:", sp.returncode)
-                return upload_success, upload_errors
             else:
                 # Failed file integrity check, try at least 10 times before failure
                 print("Analysis file {} may be corrupt, MD5 values do not match.".format(file.get('name')))
@@ -174,6 +173,7 @@ class upload_and_submit:
                     return upload_success, upload_errors
                 else:
                     self.upload_to_ENA(trialcount)
+        return upload_success, upload_errors
 
     def save_accession(self, accession):
         """
