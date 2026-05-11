@@ -303,8 +303,8 @@ class upload_and_submit:
             print("-" * 100)
             print("CURL submission command: \n")
             print(self._sanitize_for_logging(command))
-            print("Returned output: \n")
-            print(self._sanitize_for_logging(out))
+            print("Returned output: [redacted]")
+            print("Returned output length (bytes): {}".format(len(out) if out is not None else 0))
             print("-" * 100)
         else:
             print("File upload errors detected, aborted file upload:\n {}".format(errors))
