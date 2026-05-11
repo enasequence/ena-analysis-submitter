@@ -301,8 +301,7 @@ class upload_and_submit:
             attempts = 0
             command, out = self.submission(attempts)
             print("-" * 100)
-            print("CURL submission command: \n")
-            print(self._sanitize_for_logging(command))
+            print("CURL submission command: [redacted]")
             print("Returned output: [redacted]")
             print("Returned output length (bytes): {}".format(len(out) if out is not None else 0))
             print("-" * 100)
