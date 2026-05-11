@@ -117,6 +117,27 @@ class upload_and_submit:
         self.api_service = api_service
         self.test = test
 
+    def _sanitize_for_logging(self, value):
+        """
+        Redact sensitive credentials from text before logging.
+        :param value: bytes or string to sanitize
+        :return: Sanitized string safe for logs
+        """
+        if isinstance(value, bytes):
+            text = value.decode(errors='replace')
+        else:
+            text = str(value)
+
+        if self.analysis_password:
+            text = text.replace(self.analysis_password, '***REDACTED***')
+
+        # Mask common curl basic-auth token in command strings: -u username:password
+        text = text.replace('-u {}:'.format(self.analysis_username), '-u {}:***REDACTED***'.format(self.analysis_username))
+        # Mask potential URL-style credentials: username:password@
+        text = text.replace('{}:@'.format(self.analysis_username), '{}:***REDACTED***@'.format(self.analysis_username))
+
+        return text
+
     def upload_to_ENA(self, trialcount):
         """
         Upload data file(s) to ENA
@@ -280,10 +301,9 @@ class upload_and_submit:
             attempts = 0
             command, out = self.submission(attempts)
             print("-" * 100)
-            print("CURL submission command: \n")
-            print(command)
-            print("Returned output: \n")
-            print(out.decode())
+            print("CURL submission command: [redacted]")
+            print("Returned output: [redacted]")
+            print("Returned output length (bytes): {}".format(len(out) if out is not None else 0))
             print("-" * 100)
         else:
             print("File upload errors detected, aborted file upload:\n {}".format(errors))
