@@ -153,8 +153,8 @@ class upload_and_submit:
             md5downloaded = "curl -s ftp://webin.ebi.ac.uk/{} --user {}:{} | md5sum | cut -f1 -d ' '".format(os.path.basename(file.get('name')), self.analysis_username, self.analysis_password)       # Command to check the MD5 value for the submitted file
             md5uploaded = file.get('md5_value')         # The MD5 calculated before the file upload
             print('-' * 100)
-            print("CURL command:\n{}".format(command))
-            print("MD5 Download command:\n{}".format(md5downloaded))
+            print("Upload operation prepared for file: {}".format(os.path.basename(file.get('name'))))
+            print("MD5 verification operation prepared for file: {}".format(os.path.basename(file.get('name'))))
             print("MD5 uploaded:\n{}".format(md5uploaded))
             print('-' * 100)
 
